@@ -1,0 +1,39 @@
+{
+  "name": "AutoMemory",
+  "display_name": "AutoMemory",
+  "description": "บันทึกและเรียกใช้ Memory โดยอัตโนมัติ",
+  "version": "1.0.0",
+  "author": "คุณ",
+  "requires": [],
+  "optional": [],
+  "script": "index.js",
+  "css": "style.css",
+  "html": "index.html",
+  "settings": [
+    {
+      "type": "header",
+      "text": "การตั้งค่า AutoMemory"
+    },
+    {
+      "type": "setting",
+      "key": "auto_memory_frequency",
+      "label": "ความถี่ในการบันทึก Memory (ทุกกี่ข้อความ)",
+      "default": 5,
+      "description": "ตัวละครจะวิเคราะห์และบันทึก memory ทุกๆ จำนวนข้อความที่กำหนด"
+    },
+    {
+      "type": "setting",
+      "key": "memory_limit",
+      "label": "จำนวน Memory สูงสุดที่เก็บไว้",
+      "default": 20,
+      "description": "จำนวน memory สูงสุดที่ตัวละครจะจดจำ"
+    },
+    {
+      "type": "setting",
+      "key": "memory_importance_threshold",
+      "label": "เกณฑ์ความสำคัญของ Memory",
+      "default": 0.7,
+      "description": "ค่าตั้งแต่ 0.0-1.0 ยิ่งสูงยิ่งเลือกเฉพาะสิ่งสำคัญจริงๆ"
+    }
+  ]
+}
