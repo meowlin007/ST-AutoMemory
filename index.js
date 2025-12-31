@@ -1,40 +1,645 @@
-// AutoMemory Extension (เวอร์ชันแก้ไขแล้ว)
-let memoryEntries = [];
-const MEMORY_WORLD_INFO_NAME = "AutoMemory";
+// AutoMemory Extension - เวอร์ชันแก้ไขแล้ว
+const AUTO_MEMORY_WORLD_INFO_FOLDER = "AutoMemory";
+const FLOATING_BUTTON_ID = "autoMemoryFloatingBtn";
+const MEMORY_PANEL_ID = "autoMemoryPanel";
 
+// ตัวแปรสถานะ
+let memoryEntries = [];
+let messageCounter = 0;
+let settings = {
+    auto_memory_frequency: 5,
+    memory_limit: 20,
+    show_floating_button: true,
+    auto_memory_world_info_folder: AUTO_MEMORY_WORLD_INFO_FOLDER
+};
+
+// เริ่มต้น Extension
 async function extensionAutoMemory() {
-    console.log("AutoMemory Extension เริ่มทำงานแล้ว!");
+    console.log("[AutoMemory] เริ่มการทำงาน...");
     
-    // สร้างปุ่มลอยตัวทันที
-    createFloatingButton();
+    // โหลดการตั้งค่า
+    await loadSettings();
     
-    // โหลดการตั้งค่าเริ่มต้น
-    const settings = {
-        auto_memory_frequency: 5,
-        memory_limit: 20
-    };
+    // สร้าง UI
+    if (settings.show_floating_button) {
+        createFloatingButton();
+    }
+    
+    // โหลด memories จาก World Info
+    await loadMemories();
     
     // ฟังเหตุการณ์การส่งข้อความ
     document.addEventListener('messageSent', handleNewMessage);
     document.addEventListener('messageReceived', handleNewMessage);
+    
+    console.log("[AutoMemory] เริ่มทำงานเสร็จสมบูรณ์!");
 }
 
-// จัดการข้อความใหม่ (เวอร์ชันง่าย)
-let messageCounter = 0;
-function handleNewMessage(event) {
-    messageCounter++;
-    
-    // ทุก 3 ข้อความ ให้บันทึกความทรงจำตัวอย่าง
-    if (messageCounter >= 3) {
-        messageCounter = 0;
-        saveSampleMemory();
+// โหลดการตั้งค่าจาก localStorage
+async function loadSettings() {
+    try {
+        const savedSettings = JSON.parse(localStorage.getItem('AutoMemory_settings')) || {};
+        settings = { ...settings, ...savedSettings };
+        console.log("[AutoMemory] โหลดการตั้งค่า:", settings);
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถโหลดการตั้งค่าได้:", error);
     }
 }
 
-// บันทึกความทรงจำตัวอย่าง
-function saveSampleMemory() {
-    const sampleMemories = [
-        "เธอชอบกินขนมปังรสสังขยา",
+// บันทึกการตั้งค่า
+function saveSettings() {
+    try {
+        localStorage.setItem('AutoMemory_settings', JSON.stringify(settings));
+        console.log("[AutoMemory] บันทึกการตั้งค่าแล้ว");
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถบันทึกการตั้งค่าได้:", error);
+    }
+}
+
+// โหลด memories จาก World Info
+async function loadMemories() {
+    try {
+        memoryEntries = [];
+        
+        // ใช้ API ของ SillyTavern เพื่อโหลด World Info
+        const worldInfo = await callGeneric('world_info/get_all', {});
+        
+        if (worldInfo && worldInfo.entries) {
+            // กรองเฉพาะ entries ที่อยู่ในโฟลเดอร์ AutoMemory
+            memoryEntries = worldInfo.entries
+                .filter(entry => 
+                    entry.folder === settings.auto_memory_world_info_folder &&
+                    entry.comment?.includes('AutoMemory')
+                )
+                .map(entry => ({
+                    id: entry._id || entry.id,
+                    content: entry.content,
+                    keywords: Array.isArray(entry.key) ? entry.key : [entry.key],
+                    timestamp: entry.comment?.split('|')[1]?.trim() || new Date().toISOString(),
+                    character: entry.comment?.split('|')[0]?.replace('AutoMemory-', '') || 'unknown'
+                }));
+                
+            console.log(`[AutoMemory] โหลด Memories แล้ว ${memoryEntries.length} รายการ`);
+        }
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถโหลด Memories ได้:", error);
+    }
+}
+
+// จัดการข้อความใหม่
+async function handleNewMessage(event) {
+    messageCounter++;
+    const message = event.detail?.message || event.detail;
+    
+    // ตรวจสอบว่าถึงเวลาบันทึก memory หรือไม่
+    if (messageCounter >= settings.auto_memory_frequency) {
+        messageCounter = 0;
+        await analyzeAndSaveMemory();
+    }
+    
+    // สแกนหา memories ที่เกี่ยวข้องกับข้อความนี้
+    await scanForRelevantMemories(message);
+}
+
+// วิเคราะห์และบันทึก memory
+async function analyzeAndSaveMemory() {
+    try {
+        // ดึงประวัติการแชทล่าสุด
+        const chatHistory = await callGeneric('chat/get_history', {});
+        if (!chatHistory || !chatHistory.chat || chatHistory.chat.length < 3) return;
+        
+        // ใช้ข้อความล่าสุด 10 ข้อความ
+        const recentMessages = chatHistory.chat.slice(-10);
+        const characterName = chatHistory.character?.name || "ตัวละคร";
+        
+        // สร้าง prompt สำหรับ AI
+        const prompt = `คุณเป็นผู้ช่วยจดจำความทรงจำ วิเคราะห์บทสนทนาด้านล่างและดึงข้อมูลสำคัญที่ตัวละครควรจดจำเกี่ยวกับผู้ใช้
+ให้สรุปเป็นประโยคสั้นๆ ในรูปแบบ "ผู้ใช้ + ข้อมูลที่ควรจดจำ" ใช้คำว่า "ผู้ใช้" เสมอ
+ให้โฟกัสเฉพาะข้อมูลที่เกี่ยวข้องกับความชอบ สิ่งที่ผู้ใช้บอก หรือเรื่องสำคัญที่เกิดขึ้น
+ถ้าไม่มีข้อมูลสำคัญที่ควรจดจำ ให้ตอบว่า "ไม่มีข้อมูลสำคัญ"
+
+ตัวอย่าง:
+- ผู้ใช้ชอบกินขนมปังรสสังขยา
+- ผู้ใช้เลี้ยงแมวชื่อเหมียว
+- ผู้ใช้ทำงานเป็นโปรแกรมเมอร์
+
+บทสนทนาล่าสุด:
+${recentMessages.map(msg => `${msg.name || 'Unknown'}: ${msg.mes}`).join('\n')}
+`;
+
+        // ใช้ slash command /gen เพื่อสร้างข้อความในแบ็คกราวน์
+        const aiResponse = await executeSlashCommandsWithOptions(
+            `/gen silent "${prompt}"`
+        );
+        
+        if (!aiResponse || aiResponse.includes("ไม่มีข้อมูลสำคัญ")) {
+            console.log("[AutoMemory] ไม่พบข้อมูลสำคัญที่ควรจดจำ");
+            return;
+        }
+        
+        // แยกแต่ละ memory ถ้ามีหลายอัน
+        const memories = aiResponse.split('\n')
+            .filter(line => line.trim() && !line.includes("ไม่มีข้อมูลสำคัญ"))
+            .map(line => line.trim());
+        
+        for (const memoryText of memories) {
+            if (memoryText) {
+                // ดึง keyword จาก memory
+                const keywords = extractKeywords(memoryText);
+                
+                // บันทึก memory
+                await saveMemory(memoryText, keywords, characterName);
+            }
+        }
+        
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถวิเคราะห์ memory ได้:", error);
+        showToast("เกิดข้อผิดพลาดในการวิเคราะห์ความทรงจำ", "error");
+    }
+}
+
+// สแกนหา memories ที่เกี่ยวข้อง
+async function scanForRelevantMemories(message) {
+    if (!memoryEntries.length || !message) return;
+    
+    const keywords = extractKeywords(message.mes || message);
+    if (keywords.length === 0) return;
+    
+    // ค้นหา memories ที่ตรงกับ keyword
+    const relevantMemories = memoryEntries.filter(memory => {
+        return keywords.some(keyword => 
+            memory.keywords.some(kw => 
+                keyword.toLowerCase().includes(kw.toLowerCase()) ||
+                kw.toLowerCase().includes(keyword.toLowerCase())
+            )
+        );
+    });
+    
+    if (relevantMemories.length > 0) {
+        console.log(`[AutoMemory] พบ Memories ที่เกี่ยวข้อง: ${relevantMemories.length} รายการ`);
+        
+        // แทรก memories ที่เกี่ยวข้องเข้าไปใน context
+        const memoryContext = relevantMemories.map(mem => 
+            `[ความทรงจำ]: ${mem.content}`
+        ).join('\n');
+        
+        // เพิ่มเข้าไปใน context ของ chat
+        await callGeneric('context/add', {
+            context: memoryContext,
+            position: 'before_prompt'
+        });
+    }
+}
+
+// ดึง keyword จากข้อความ
+function extractKeywords(text) {
+    if (!text || typeof text !== 'string') return [];
+    
+    // ลบเครื่องหมายวรรคตอนและตัวเลข
+    const cleanText = text.replace(/[^\w\sก-๙]/g, '').replace(/\d+/g, '');
+    
+    // แบ่งคำ
+    const words = cleanText.split(/\s+/).filter(word => word.length > 0);
+    
+    // กรองคำที่ไม่สำคัญ
+    const stopWords = ['และ', 'หรือ', 'แต่', 'ของ', 'ที่', 'ใน', 'บน', 'กับ', 'เป็น', 'ได้', 'มี', 'ให้', 'ไป', 'มา', 
+                      'นะ', 'ครับ', 'ค่ะ', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 
+                      'is', 'are', 'was', 'were', 'be', 'been', 'ผู้ใช้', 'เขา', 'เธอ', 'ฉัน', 'ผม', 'ดิฉัน', 'มัน'];
+    
+    return words
+        .map(word => word.trim().toLowerCase())
+        .filter(word => word.length > 2 && !stopWords.includes(word))
+        .slice(0, 5); // จำกัดที่ 5 keyword
+}
+
+// บันทึก memory ใหม่
+async function saveMemory(content, keywords, characterName) {
+    try {
+        // ตรวจสอบว่ามี memory ซ้ำหรือไม่
+        const isDuplicate = memoryEntries.some(entry => 
+            entry.content.toLowerCase() === content.toLowerCase()
+        );
+        
+        if (isDuplicate) {
+            console.log("[AutoMemory] Memory นี้มีอยู่แล้ว:", content);
+            return;
+        }
+        
+        // สร้าง entry สำหรับ World Info
+        const timestamp = new Date().toISOString();
+        const comment = `AutoMemory-${characterName} | ${timestamp}`;
+        
+        const worldInfoEntry = {
+            comment: comment,
+            key: keywords,
+            content: content,
+            folder: settings.auto_memory_world_info_folder,
+            selective: true,
+            secondary_keys: [],
+            constant: false,
+            position: 0,
+            exclude_recursion: false,
+            probability_presence: 100,
+            probability_match: 100
+        };
+        
+        // บันทึกใน World Info
+        const result = await callGeneric('world_info/create', worldInfoEntry);
+        
+        if (result?.success) {
+            // เพิ่มในรายการ memories
+            memoryEntries.unshift({
+                id: result.id,
+                content: content,
+                keywords: keywords,
+                timestamp: timestamp,
+                character: characterName
+            });
+            
+            // จำกัดจำนวน memories
+            if (memoryEntries.length > settings.memory_limit) {
+                const oldest = memoryEntries.pop();
+                await callGeneric('world_info/delete', { id: oldest.id });
+            }
+            
+            console.log("[AutoMemory] บันทึก Memory ใหม่:", content);
+            showToast(`บันทึกความทรงจำ: ${content}`);
+            
+            // อัปเดท UI
+            if (document.getElementById(MEMORY_PANEL_ID)?.classList.contains('visible')) {
+                refreshMemoryPanel();
+            }
+        } else {
+            throw new Error("ไม่สามารถบันทึกใน World Info ได้");
+        }
+        
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถบันทึก memory ได้:", error);
+        showToast("เกิดข้อผิดพลาดในการบันทึกความทรงจำ", "error");
+        
+        // บันทึกลง localStorage เป็น backup
+        saveToLocalStorage(content, keywords, characterName);
+    }
+}
+
+// บันทึกใน localStorage เป็น backup
+function saveToLocalStorage(content, keywords, characterName) {
+    try {
+        const backupMemories = JSON.parse(localStorage.getItem('AutoMemory_backup')) || [];
+        
+        backupMemories.unshift({
+            content: content,
+            keywords: keywords,
+            character: characterName,
+            timestamp: new Date().toISOString(),
+            status: 'failed'
+        });
+        
+        // จำกัดที่ 50 รายการ
+        if (backupMemories.length > 50) {
+            backupMemories.pop();
+        }
+        
+        localStorage.setItem('AutoMemory_backup', JSON.stringify(backupMemories));
+        console.log("[AutoMemory] บันทึกใน localStorage สำรองแล้ว");
+    } catch (error) {
+        console.error("[AutoMemory] ไม่สามารถบันทึกใน localStorage ได้:", error);
+    }
+}
+
+// สร้างปุ่มลอยตัว
+function createFloatingButton() {
+    // ลบปุ่มเก่าถ้ามี
+    const existingBtn = document.getElementById(FLOATING_BUTTON_ID);
+    if (existingBtn) existingBtn.remove();
+    
+    // โหลดสไตล์
+    loadFloatingButtonStyle();
+    
+    // สร้างปุ่ม
+    const btn = document.createElement('div');
+    btn.id = FLOATING_BUTTON_ID;
+    btn.className = 'diary-float-window';
+    btn.innerHTML = `
+        <div class="diary-float-content">
+            <span>🧠</span>
+        </div>
+        <div class="diary-menu">
+            <div class="diary-menu-item" id="openMemoryPanel">
+                <span>📖</span> ความทรงจำ
+            </div>
+            <div class="diary-menu-item" id="manualSaveMemory">
+                <span>✏️</span> บันทึกเอง
+            </div>
+            <div class="diary-menu-item" id="clearAllMemories">
+                <span>🗑️</span> ล้างทั้งหมด
+            </div>
+        </div>
+    `;
+    document.body.appendChild(btn);
+    
+    // เหตุการณ์สำหรับปุ่ม
+    btn.addEventListener('click', (e) => {
+        if (e.target === btn || e.target.closest('.diary-float-content')) {
+            btn.classList.toggle('expanded');
+        }
+    });
+    
+    // ปุ่มในเมนู
+    document.getElementById('openMemoryPanel').addEventListener('click', () => {
+        openMemoryPanel();
+        btn.classList.remove('expanded');
+    });
+    
+    document.getElementById('manualSaveMemory').addEventListener('click', () => {
+        manualSaveMemory();
+        btn.classList.remove('expanded');
+    });
+    
+    document.getElementById('clearAllMemories').addEventListener('click', async () => {
+        if (confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างความทรงจำทั้งหมด?')) {
+            await clearAllMemories();
+        }
+        btn.classList.remove('expanded');
+    });
+    
+    // ทำให้ปุ่มลอยตัวลากได้
+    makeDraggable(btn);
+    
+    console.log("[AutoMemory] สร้างปุ่มลอยตัวแล้ว");
+}
+
+// โหลดสไตล์สำหรับปุ่มลอยตัว
+function loadFloatingButtonStyle() {
+    const styleId = 'autoMemoryFloatingStyle';
+    if (document.getElementById(styleId)) return;
+    
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+        #${FLOATING_BUTTON_ID} {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: grab;
+            z-index: 9999;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+        
+        #${FLOATING_BUTTON_ID}:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+        
+        #${FLOATING_BUTTON_ID}.expanded {
+            border-radius: 20px;
+            width: 200px;
+            height: 60px;
+        }
+        
+        .diary-float-content {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+        }
+        
+        #${FLOATING_BUTTON_ID}.expanded .diary-float-content {
+            opacity: 0;
+        }
+        
+        .diary-menu {
+            display: flex;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        #${FLOATING_BUTTON_ID}.expanded .diary-menu {
+            opacity: 1;
+        }
+        
+        .diary-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 15px;
+            background: rgba(255,255,255,0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .diary-menu-item:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+        
+        #${MEMORY_PANEL_ID} {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 300px;
+            max-width: 90%;
+            max-height: 90vh;
+            background: #2d2d3a;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            z-index: 10000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+        
+        #${MEMORY_PANEL_ID}.visible {
+            display: flex;
+        }
+        
+        .diary-panel-header {
+            background: linear-gradient(135deg, #3a3a4a 0%, #2d2d3a 100%);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #444;
+        }
+        
+        .diary-panel-title {
+            color: #ffd700;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .diary-panel-close {
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .diary-panel-close:hover {
+            background: #ff1a1a;
+            transform: scale(1.1);
+        }
+        
+        .diary-panel-content {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            color: #e0e0e0;
+        }
+        
+        .memory-entry {
+            background: #3a3a4a;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            border-left: 4px solid #6a11cb;
+        }
+        
+        .memory-entry:hover {
+            background: #424255;
+            transform: translateX(5px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        
+        .memory-content {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .memory-character {
+            font-size: 0.9em;
+            color: #a8a8e0;
+            margin-bottom: 5px;
+        }
+        
+        .memory-keywords {
+            font-size: 0.8em;
+            color: #88cc88;
+        }
+        
+        .memory-timestamp {
+            font-size: 0.75em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        
+        .memory-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .memory-btn {
+            padding: 4px 10px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s ease;
+        }
+        
+        .memory-btn.delete {
+            background: #ff4d4d;
+            color: white;
+        }
+        
+        .memory-btn.edit {
+            background: #3a86ff;
+            color: white;
+        }
+        
+        .no-memories {
+            text-align: center;
+            color: #aaa;
+            padding: 30px;
+            font-style: italic;
+            font-size: 1.1em;
+        }
+        
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 25px;
+            border-radius: 25px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 99999;
+            animation: slideIn 0.3s, fadeOut 0.5s 2s forwards;
+        }
+        
+        .toast-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        .toast-error {
+            background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+        }
+        
+        @keyframes slideIn {
+            from { transform: translate(-50%, 100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translate(-50%, 100%); }
+        }
+        
+        @media (max-width: 768px) {
+            #${FLOATING_BUTTON_ID} {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+            
+            #${FLOATING_BUTTON_ID}.expanded {
+                width: calc(100% - 40px);
+                left: 20px;
+                right: auto;
+                border-radius: 15px;
+            }
+            
+            .diary-menu {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .diary-menu-item {
+                font-size: 12px;
+                padding: 4px 8        "เธอชอบกินขนมปังรสสังขยา",
         "เธอชอบดื่มกาแฟร้อนตอนเช้า",
         "เธอเลี้ยงแมวชื่อเหมียว"
     ];
