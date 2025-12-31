@@ -117,6 +117,96 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
+    .auto-memory-content {
+        max-height: 50vh;
+    }
+    
+    .memory-entry {
+        padding: 10px;
+    }
+}
+.memory-entry:hover {
+    background: #424255;
+    transform: translateX(5px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+}
+
+.memory-content {
+    margin-bottom: 5px;
+    line-height: 1.4;
+}
+
+.memory-keywords {
+    font-size: 0.85em;
+    color: #a8a8e0;
+}
+
+.memory-timestamp {
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 3px;
+}
+
+.memory-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.memory-btn {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s;
+}
+
+.memory-btn.delete {
+    background: #ff4d4d;
+    color: white;
+}
+
+.memory-btn.edit {
+    background: #3a86ff;
+    color: white;
+}
+
+.memory-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.no-memories {
+    text-align: center;
+    color: #aaa;
+    padding: 20px;
+    font-style: italic;
+}
+
+.memory-stats {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: #2d2d3a;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+}
+
+.memory-stats span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.memory-stats i {
+    color: #ffd700;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
     #autoMemoryPanel {
         width: 90%;
         right: 50%;
