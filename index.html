@@ -1,0 +1,40 @@
+<div class="auto-memory-container">
+    <div class="auto-memory-header">
+        <div class="auto-memory-title">AutoMemory</div>
+        <div>
+            <button class="memory-btn refresh" id="refreshMemories">รีเฟรช</button>
+            <button class="memory-btn clear" id="clearAllMemories">ล้างทั้งหมด</button>
+        </div>
+    </div>
+    
+    <div class="memory-stats">
+        <span><i>🧠</i> <span id="memoryCount">0</span> ความทรงจำ</span>
+        <span><i>⏱️</i> อัพเดทล่าสุด: <span id="lastUpdate">-</span></span>
+    </div>
+    
+    <div class="auto-memory-content" id="memoriesList">
+        <div class="no-memories">ยังไม่มีความทรงจำถูกบันทึก</div>
+    </div>
+</div>
+
+<script>
+    // JavaScript สำหรับจัดการ UI ของ panel
+    document.addEventListener('DOMContentLoaded', function() {
+        const refreshBtn = document.getElementById('refreshMemories');
+        const clearBtn = document.getElementById('clearAllMemories');
+        
+        refreshBtn.addEventListener('click', function() {
+            // เรียก function จาก index.js เพื่อรีเฟรช memory
+            if (typeof refreshMemoryPanel === 'function') {
+                refreshMemoryPanel();
+            }
+        });
+        
+        clearBtn.addEventListener('click', function() {
+            // เรียก function จาก index.js เพื่อล้าง memory
+            if (typeof clearAllMemories === 'function') {
+                clearAllMemories();
+            }
+        });
+    });
+</script>
