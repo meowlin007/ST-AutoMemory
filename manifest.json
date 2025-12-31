@@ -1,11 +1,13 @@
 {
   "name": "AutoMemory",
   "display_name": "AutoMemory",
-  "description": "บันทึกและเรียกใช้ Memory โดยอัตโนมัติ",
+  "description": "บันทึกความทรงจำอัตโนมัติระหว่างการสนทนา",
   "version": "1.0.0",
-  "author": "คุณ",
-  "requires": [],
-  "optional": [],
+  "author": "meowlin007",
+  "requires": ["storage", "world_info"],
+  "optional": ["slash_commands"],
+  "license": "MIT",
+  "homepage": "https://github.com/meowlin007/ST-AutoMemory",
   "script": "index.js",
   "css": "style.css",
   "html": "index.html",
@@ -19,6 +21,9 @@
       "key": "auto_memory_frequency",
       "label": "ความถี่ในการบันทึก Memory (ทุกกี่ข้อความ)",
       "default": 5,
+      "min": 1,
+      "max": 50,
+      "step": 1,
       "description": "ตัวละครจะวิเคราะห์และบันทึก memory ทุกๆ จำนวนข้อความที่กำหนด"
     },
     {
@@ -26,14 +31,24 @@
       "key": "memory_limit",
       "label": "จำนวน Memory สูงสุดที่เก็บไว้",
       "default": 20,
+      "min": 5,
+      "max": 100,
+      "step": 1,
       "description": "จำนวน memory สูงสุดที่ตัวละครจะจดจำ"
     },
     {
       "type": "setting",
-      "key": "memory_importance_threshold",
-      "label": "เกณฑ์ความสำคัญของ Memory",
-      "default": 0.7,
-      "description": "ค่าตั้งแต่ 0.0-1.0 ยิ่งสูงยิ่งเลือกเฉพาะสิ่งสำคัญจริงๆ"
+      "key": "show_floating_button",
+      "label": "แสดงปุ่มลอยตัว",
+      "default": true,
+      "description": "แสดงปุ่มลอยตัวสำหรับจัดการความทรงจำ"
+    },
+    {
+      "type": "setting",
+      "key": "auto_memory_world_info_folder",
+      "label": "ชื่อโฟลเดอร์ World Info",
+      "default": "AutoMemory",
+      "description": "ชื่อโฟลเดอร์ใน World Info สำหรับเก็บความทรงจำ"
     }
   ]
 }
