@@ -1,6 +1,6 @@
 <div class="auto-memory-container">
     <div class="auto-memory-header">
-        <div class="auto-memory-title">AutoMemory</div>
+        <div class="auto-memory-title">AutoMemory Settings</div>
         <div>
             <button class="memory-btn refresh" id="refreshMemories">รีเฟรช</button>
             <button class="memory-btn clear" id="clearAllMemories">ล้างทั้งหมด</button>
@@ -15,26 +15,110 @@
     <div class="auto-memory-content" id="memoriesList">
         <div class="no-memories">ยังไม่มีความทรงจำถูกบันทึก</div>
     </div>
+    
+    <div class="settings-section">
+        <h3>การตั้งค่าเพิ่มเติม</h3>
+        <div class="setting-item">
+            <label>
+                <input type="checkbox" id="showFloatingButton" checked>
+                แสดงปุ่มลอยตัว
+            </label>
+        </div>
+        <div class="setting-item">
+            <label>
+                โฟลเดอร์ World Info:
+                <input type="text" id="worldInfoFolder" value="AutoMemory">
+            </label>
+        </div>
+        <button class="memory-btn save-settings" id="saveSettings">บันทึกการตั้งค่า</button>
+    </div>
 </div>
 
+<style>
+    .settings-section {
+        margin-top: 20px;
+        padding: 15px;
+        background: #3a3a4a;
+        border-radius: 8px;
+    }
+    
+    .setting-item {
+        margin: 10px 0;
+    }
+    
+    .setting-item input[type="text"] {
+        padding: 5px;
+        background: #2d2d3a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: white;
+        width: 200px;
+    }
+    
+    .save-settings {
+        background: #4CAF50;
+        color: white;
+        margin-top: 10px;
+    }
+</style>
+
 <script>
-    // JavaScript สำหรับจัดการ UI ของ panel
     document.addEventListener('DOMContentLoaded', function() {
-        const refreshBtn = document.getElementById('refreshMemories');
-        const clearBtn = document.getElementById('clearAllMemories');
+        // นับจำนวน memories
+        function updateMemoryCount() {
+            const count = document.querySelectorAll('.memory-entry').length;
+            document.getElementById('memoryCount').textContent = count;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('th-TH');
+        }
         
-        refreshBtn.addEventListener('click', function() {
-            // เรียก function จาก index.js เพื่อรีเฟรช memory
+        // รีเฟรช memories
+        document.getElementById('refreshMemories').addEventListener('click', function() {
             if (typeof refreshMemoryPanel === 'function') {
                 refreshMemoryPanel();
+                updateMemoryCount();
             }
         });
         
-        clearBtn.addEventListener('click', function() {
-            // เรียก function จาก index.js เพื่อล้าง memory
+        // ล้าง memories ทั้งหมด
+        document.getElementById('clearAllMemories').addEventListener('click', function() {
             if (typeof clearAllMemories === 'function') {
                 clearAllMemories();
             }
+        });
+        
+        // บันทึกการตั้งค่า
+        document.getElementById('saveSettings').addEventListener('click', function() {
+            const showFloating = document.getElementById('showFloatingButton').checked;
+            const folderName = document.getElementById('worldInfoFolder').value.trim() || 'AutoMemory';
+            
+            // เก็บใน localStorage
+            const settings = {
+                show_floating_button: showFloating,
+                auto_memory_world_info_folder: folderName
+            };
+            
+            localStorage.setItem('AutoMemory_settings', JSON.stringify(settings));
+            alert('บันทึกการตั้งค่าแล้ว! รีเฟรชหน้าเพื่อให้การตั้งค่ามีผล');
+        });
+        
+        // โหลดการตั้งค่าที่บันทึกไว้
+        function loadSavedSettings() {
+            try {
+                const savedSettings = JSON.parse(localStorage.getItem('AutoMemory_settings')) || {};
+                document.getElementById('showFloatingButton').checked = savedSettings.show_floating_button !== false;
+                document.getElementById('worldInfoFolder').value = savedSettings.auto_memory_world_info_folder || 'AutoMemory';
+            } catch (error) {
+                console.error('ไม่สามารถโหลดการตั้งค่าได้:', error);
+            }
+        }
+        
+        loadSavedSettings();
+        updateMemoryCount();
+        
+        // อัปเดททุก 30 วินาที
+        setInterval(updateMemoryCount, 30000);
+    });
+</script>            }
         });
     });
 </script>
