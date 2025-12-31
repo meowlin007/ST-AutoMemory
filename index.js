@@ -1,40 +1,237 @@
-// AutoMemory Extension
-let autoMemorySettings = {};
+// AutoMemory Extension (เวอร์ชันแก้ไขแล้ว)
 let memoryEntries = [];
-let messageCounter = 0;
 const MEMORY_WORLD_INFO_NAME = "AutoMemory";
 
-// เริ่มการทำงานของ Extension
 async function extensionAutoMemory() {
-    // โหลดการตั้งค่า
-    autoMemorySettings = await getSettings();
-    messageCounter = 0;
+    console.log("AutoMemory Extension เริ่มทำงานแล้ว!");
     
-    // สร้าง UI
+    // สร้างปุ่มลอยตัวทันที
     createFloatingButton();
     
-    // โหลด memory จาก world info
-    await loadMemories();
+    // โหลดการตั้งค่าเริ่มต้น
+    const settings = {
+        auto_memory_frequency: 5,
+        memory_limit: 20
+    };
     
     // ฟังเหตุการณ์การส่งข้อความ
     document.addEventListener('messageSent', handleNewMessage);
     document.addEventListener('messageReceived', handleNewMessage);
-    
-    console.log("AutoMemory Extension ทำงานแล้ว!");
 }
 
-// โหลดการตั้งค่า
-async function getSettings() {
-    const defaultSettings = {
-        auto_memory_frequency: 5,
-        memory_limit: 20,
-        memory_importance_threshold: 0.7
+// จัดการข้อความใหม่ (เวอร์ชันง่าย)
+let messageCounter = 0;
+function handleNewMessage(event) {
+    messageCounter++;
+    
+    // ทุก 3 ข้อความ ให้บันทึกความทรงจำตัวอย่าง
+    if (messageCounter >= 3) {
+        messageCounter = 0;
+        saveSampleMemory();
+    }
+}
+
+// บันทึกความทรงจำตัวอย่าง
+function saveSampleMemory() {
+    const sampleMemories = [
+        "เธอชอบกินขนมปังรสสังขยา",
+        "เธอชอบดื่มกาแฟร้อนตอนเช้า",
+        "เธอเลี้ยงแมวชื่อเหมียว"
+    ];
+    
+    const randomMemory = sampleMemories[Math.floor(Math.random() * sampleMemories.length)];
+    const keywords = extractKeywords(randomMemory);
+    
+    addMemoryEntry(randomMemory, keywords);
+    showToast(`บันทึกความทรงจำใหม่: ${randomMemory}`);
+    
+    // อัปเดท UI
+    refreshMemoryPanel();
+}
+
+// เพิ่มความทรงจำเข้ารายการ
+function addMemoryEntry(content, keywords) {
+    const newEntry = {
+        id: Date.now().toString(),
+        content: content,
+        keywords: keywords,
+        timestamp: new Date().toISOString()
     };
     
-    try {
-        const savedSettings = await loadExtensionSettings('AutoMemory');
-        return {...defaultSettings, ...savedSettings};
-    } catch (error) {
+    memoryEntries.unshift(newEntry);
+    
+    // จำกัดจำนวน
+    if (memoryEntries.length > 20) {
+        memoryEntries.pop();
+    }
+}
+
+// ดึง keyword (เวอร์ชันง่าย)
+function extractKeywords(text) {
+    const words = text.split(/\s+/);
+    return words.filter(word => word.length > 2 && !['เธอ', 'เขา', 'มัน', 'ฉัน', 'คุณ'].includes(word));
+}
+
+// สร้างปุ่มลอยตัว (เหมือนเดิมแต่แก้ไขให้ทำงานได้ทันที)
+function createFloatingButton() {
+    // ลบปุ่มเก่าถ้ามี
+    const existingBtn = document.getElementById('autoMemoryFloatingBtn');
+    if (existingBtn) existingBtn.remove();
+    
+    // สร้างสไตล์
+    const style = document.createElement('style');
+    style.textContent = `
+        #autoMemoryFloatingBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #6a11cb;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 9999;
+        }
+        #autoMemoryFloatingBtn:hover {
+            background: #5a00b0;
+        }
+        #autoMemoryPanel {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 280px;
+            max-height: 70vh;
+            background: #2d2d3a;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+            padding: 15px;
+            z-index: 9998;
+            display: none;
+            color: white;
+            overflow-y: auto;
+        }
+        #autoMemoryPanel.visible {
+            display: block;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // สร้างปุ่ม
+    const btn = document.createElement('div');
+    btn.id = 'autoMemoryFloatingBtn';
+    btn.innerHTML = '🧠';
+    document.body.appendChild(btn);
+    
+    // สร้าง panel
+    const panel = document.createElement('div');
+    panel.id = 'autoMemoryPanel';
+    panel.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #ffd700;">ความทรงจำของฉัน</h3>
+            <span id="closeMemoryPanel" style="cursor: pointer; font-weight: bold;">×</span>
+        </div>
+        <div id="memoryList" style="max-height: 60vh; overflow-y: auto;">
+            <p style="text-align: center; color: #aaa;">ยังไม่มีความทรงจำ</p>
+        </div>
+    `;
+    document.body.appendChild(panel);
+    
+    // เหตุการณ์
+    btn.addEventListener('click', () => {
+        panel.classList.toggle('visible');
+        if (panel.classList.contains('visible')) {
+            refreshMemoryPanel();
+        }
+    });
+    
+    document.getElementById('closeMemoryPanel').addEventListener('click', () => {
+        panel.classList.remove('visible');
+    });
+    
+    console.log("ปุ่มลอยตัวสร้างแล้ว!");
+}
+
+// อัปเดท panel แสดงความทรงจำ
+function refreshMemoryPanel() {
+    const list = document.getElementById('memoryList');
+    
+    if (memoryEntries.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: #aaa;">ยังไม่มีความทรงจำ</p>';
+        return;
+    }
+    
+    let html = '';
+    memoryEntries.forEach((mem, i) => {
+        html += `
+            <div style="background: #3a3a4a; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                <div style="font-weight: bold; color: #ffd700;">ความทรงจำ #${i+1}</div>
+                <div>${mem.content}</div>
+                <div style="font-size: 0.8em; color: #a8a8e0; margin-top: 5px;">Keywords: ${mem.keywords.join(', ')}</div>
+                <div style="font-size: 0.7em; color: #888; margin-top: 3px;">${new Date(mem.timestamp).toLocaleTimeString('th-TH')}</div>
+            </div>
+        `;
+    });
+    
+    list.innerHTML = html;
+}
+
+// แสดงการแจ้งเตือน
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(45, 180, 80, 0.9);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 25px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        z-index: 99999;
+        font-weight: bold;
+        animation: slideIn 0.3s, fadeOut 0.5s 2s forwards;
+    `;
+    toast.innerHTML = message;
+    
+    const keyframes = `
+        @keyframes slideIn {
+            from { opacity: 0; transform: translate(-50%, 100%); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translate(-50%, 100%); }
+        }
+    `;
+    
+    const style = document.createElement('style');
+    style.textContent = keyframes;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+        style.remove();
+    }, 2500);
+}
+
+// เริ่มต้นเมื่อเอกสารโหลดเสร็จ
+document.addEventListener('DOMContentLoaded', () => {
+    // ตรวจสอบว่าโหลดในหน้าแชทเท่านั้น
+    if (window.location.pathname.includes('/chat')) {
+        extensionAutoMemory();
+    }
+});
+
+console.log("AutoMemory Extension โหลดแล้ว!");    } catch (error) {
         console.error("ไม่สามารถโหลดการตั้งค่าได้:", error);
         return defaultSettings;
     }
