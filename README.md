@@ -101,5 +101,4 @@
 
 MIT License - อนุญาตให้ใช้ คัดลอก และดัดแปลงได้ฟรี
 
-© 2025 meowlin007. All rights reserved.   }
-}
+© 2025 meowlin007. All rights reserved.   
